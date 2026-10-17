@@ -58,6 +58,18 @@ The DTBO contains multiple LCD candidates, including `lcd_ft8006saa_inx_mipi_hd`
 This improves the recovery plan: retain the stock recovery ramdisk module set and its `modules.load.recovery` ordering rather than inventing a new module load list. Verify the merged live device tree or recovery input events before pruning any alternative drivers.
 
 
+### Staged recovery runtime validation
+
+The extracted runtime currently staged under `recovery/root` was checked against the matching `vendor_boot.img`:
+
+- `modules.load.recovery` contains 157 entries and all 157 corresponding `.ko` files are present.
+- Both `sprd-focaltech.ko` and `focaltech_ft8756_spi_ts.ko` are listed; this preserves the stock order rather than guessing a single driver.
+- The board-specific `init.recovery.ums9230_nico.rc`, common recovery init, `modules.dep`, recovery fstab, first-stage fstab and vendor subtree are present.
+- Stock `init.rc` is not copied into the TWRP root.
+- AVB flags were stripped from the staged recovery and first-stage fstab copies to avoid carrying stock recovery mount flags into the new environment.
+
+These are static packaging checks only. They do not prove that the panel binds to either driver or that the TWRP UI will receive touch events.
+
 ### Firmware lookup and module ordering
 
 Further inspection of the stock module metadata and ramdisk shows:
