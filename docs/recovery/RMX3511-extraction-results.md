@@ -42,7 +42,7 @@ The ramdisk extraction helper is for the RMX3511 image's single legacy-LZ4 platf
 
 - No TWRP source checkout/build environment is present in the current workspace, so no recovery image has been built.
 - The exact active panel/touch overlay is not identified from the DTBO table alone.
-- The FT8756 firmware blob was not present in the vendor ramdisk. The firmware/vendor partition images must be searched before claiming touch support.
+- The exact module `focaltech_ft8756_spi_ts.ko` is present in the supplied `vendor_dlkm_a.img` listing. No FT8756-named standalone firmware file was found by filename/content search in `vendor_a.img` or `product_a.img`; the module may embed firmware, but this has not been confirmed. See [RMX3511 touch-module audit](RMX3511-touch-module-audit.md). The active DTBO and recovery module-loading path remain unverified.
 - TWRP fstab/decryption, retained stock SELinux policy handling, AVB/rollback behavior, and non-destructive boot testing remain unverified.
 
 Do not flash an image based only on these extraction results.
