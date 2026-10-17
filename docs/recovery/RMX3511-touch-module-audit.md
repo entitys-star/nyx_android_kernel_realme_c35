@@ -67,3 +67,14 @@ Further inspection of the stock module metadata and ramdisk shows:
 - The stock ramdisk's `system/etc/ueventd.rc` declares firmware lookup directories including `/vendor/firmware/`. The recovery fstab mounts the logical `vendor` partition at `/vendor` as EROFS during first-stage mount.
 
 Therefore, retain the stock module ordering and make sure the real vendor partition and its firmware directory are accessible before the touchscreen driver tries to request firmware. Do not load only `focaltech_ft8756_spi_ts.ko` and assume that is sufficient: the DTBO compatible points to `sprd_focaltech`, whose dependency modules must also be available.
+
+### Reproducible check of the user-supplied vendor_dlkm image
+
+The additional uploaded image was inspected locally on 2026-10-17:
+
+- `vendor_dlkm_a.img` SHA-256: `d5fc05c4ac5a7a037057da48f2b391f3b9198bcfc316a5accdf3a12aad1cfa53`
+- File format: Android EROFS filesystem, 4096-byte block size, LZ4 0-padding incompat feature.
+- The user's listing from that image includes `lib/modules/focaltech_ft8756_spi_ts.ko`, `lib/modules/sprd-focaltech.ko`, and `lib/modules/chipone-tddi.ko`.
+- The separately extracted copy of `focaltech_ft8756_spi_ts.ko` from the matching stock vendor_boot ramdisk is 396,854 bytes, SHA-256 `af39f96c7b2d847cd27f70b7553b8c8ce7ae08d0ba04dd5b15c1c0d2a084e546`. `modinfo` confirms FocalTech Driver Team, GPL v2, `vermagic 5.4.254-android12-9-g0b4c88190d9d-ab1584 SMP preempt mod_unload modversions aarch64`, no hard dependencies, and the `of:N*T*Cfocaltech,fts` alias.
+
+The key distinction remains: the FT8756-specific module is present, but the observed DTBO touchscreen node uses `compatible = "oppo,touchscreen"`, which resolves to `sprd_focaltech` according to the stock module aliases. Therefore the FT8756-specific module's presence alone is not evidence that it is the driver bound to this handset's active touchscreen.
