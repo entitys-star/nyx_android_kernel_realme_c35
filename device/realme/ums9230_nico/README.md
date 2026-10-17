@@ -2,7 +2,7 @@
 
 **Status: incomplete bring-up scaffold. No image has been built or boot-tested.**
 
-Target firmware: `RMX3511T2_13.F.73`, Android 13, device identity `ums9230_nico`.
+Target handset firmware label supplied for this investigation: `RMX3511T2_13.F.73`. However, the uploaded vendor_boot ramdisk's own `prop.default` reports Android 12 / SDK 31 (`ums9230_nico_Natv-user 12 SP1A.210812.016 1584 release-keys`) and `ro.product.first_api_level=30`. The TWRP source branch should therefore follow the properties actually embedded in this image unless the vendor_boot/firmware pairing is re-confirmed.
 
 ## Layout
 
