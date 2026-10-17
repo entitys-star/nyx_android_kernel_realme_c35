@@ -557,3 +557,39 @@ The separate [Ufiano/android_device_realme_RE87BAL1](https://github.com/Ufiano/a
 Generate a fresh candidate tree from the **stock** `vendor_boot.img` with `twrpdtgen-sprd`, using `--manufacturer realme --codename ums9230_nico` if the image does not identify the product correctly. Review the generated `BoardConfig.mk`, product makefile, `recovery.fstab`, retained vendor ramdisk, module list and SELinux handling before building. Include the stock `dtbo.img` in the audit if needed to confirm the panel dimensions.
 
 The exact stock `vendor_boot.img` is the key input: it is 100 MiB and its ramdisk/table contents cannot be reconstructed reliably from textual properties alone. The currently available research records its structure and properties but does not contain the binary payload. Do not generate a final device tree or vendor_boot image from the prebuilt TWRP image in place of the stock image.
+
+
+## Follow-up: audit of the Unisoc vendor_boot tree generator (2026-10-17)
+
+Source reviewed at [OneLast-arch/twrpdtgen-sprd](https://github.com/OneLast-arch/twrpdtgen-sprd), including `twrpdtgen/vendor_boot.py`, `twrpdtgen/device_tree.py`, `twrpdtgen/sprd.py`, and the generated `sprd_BoardConfig.mk.jinja2`, `sprd_device.mk.jinja2`, and `sprd_product.mk.jinja2`.
+
+### Why this generator is the best next step
+
+The generator reads a v3/v4 `vendor_boot.img` directly rather than treating it as a generic boot image. For v4 it parses the vendor ramdisk table and bootconfig, extracts the DTB and ramdisk payload, and detects legacy LZ4 framing. It then generates a `twrp_<codename>` product, selects `twrp-12.1` for Android 13 and earlier, and creates the SPRD-specific recovery init/DRM hooks. The generated README states that the kernel stays in stock `boot.img` and the output image is `vendor_boot.img`.
+
+The generator is a better starting point than the two older public RMX3511 trees because it understands the current partition placement and explicitly preserves Unisoc early-boot dependencies. Its source is available and auditable; it has not yet been run against this phone's stock image in this workspace.
+
+### Important implementation details and risks found
+
+- The generated tree copies the stock vendor ramdisk's first-stage fstab, kernel modules, recovery init fragments, ueventd configuration, SELinux files and vendor runtime into `recovery/root`; its device makefile stages these files into the built vendor ramdisk. It intentionally excludes stock top-level `init.rc` so the stock init entry point cannot replace TWRP's.
+- It sets both `BOARD_MOVE_RECOVERY_RESOURCES_TO_VENDOR_BOOT := true` and `BOARD_INCLUDE_RECOVERY_RAMDISK_IN_VENDOR_BOOT := true`, which asks TeamWin's build system to create a separate `RECOVERY`-typed fragment. It also sets `BOARD_BOOT_HEADER_VERSION` from the parsed stock header, copies the stock DTB, vendor cmdline and bootconfig, and sets the vendor_boot size from the source image length.
+- It sets `BOARD_AVB_ENABLE := true` and `BOARD_AVB_VENDOR_BOOT_ROLLBACK_INDEX_LOCATION := 0`. The firmware's root vbmeta metadata inspected above chains `vendor_boot` at rollback-index location **18**. Therefore the generated AVB settings are not a verified match for this firmware. Do not assume its output will pass stock AVB verification: the footer key, chain configuration and rollback-index location must be resolved for the actual boot path. If using an unlocked bootloader / verification-disabled test path, document that separately instead of claiming the image is stock-signed.
+- The generator sets `BOARD_RECOVERYIMAGE_PARTITION_SIZE` to the vendor_boot image size even though this firmware has no dedicated recovery partition. This is a build-compatibility setting, not evidence that a recovery partition exists.
+- The source parser extracts all v4 fragments into one staging directory. The inspected stock image contains a single platform fragment, so that behavior is sufficient for the current image structure; if a different firmware has multiple fragments with colliding paths, extraction/overlay behavior needs a separate audit.
+
+### Candidate invocation once the stock image is available
+
+Run from a Linux/WSL environment with Python 3.8+, `cpio`, and `lz4` installed:
+
+```sh
+git clone https://github.com/OneLast-arch/twrpdtgen-sprd.git
+cd twrpdtgen-sprd
+python3 -m pip install .
+twrpdtgen /path/to/stock/vendor_boot.img -o /path/to/generated-tree --manufacturer realme --codename ums9230_nico
+```
+
+This is the documented generation path, not a build or flash instruction. The generated tree must be reviewed before running its source patch script or building. In particular, check the generated product name, branch/lunch target, the exact stock files retained, fstab paths and AVB variables.
+
+### Next verification gate
+
+The source-level path is now sufficiently identified: generate a fresh SPRD tree from the stock `RMX3511T2_13.F.73` `vendor_boot.img`, then compare the generated configuration and extracted ramdisk files against the firmware inventory already recorded in this document. The actual stock image bytes are not currently present in this research workspace or GitHub repository, so generation and image-level comparison have not yet occurred. Do not substitute the public prebuilt TWRP image for the stock `vendor_boot.img`.
