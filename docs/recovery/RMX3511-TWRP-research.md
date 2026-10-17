@@ -403,3 +403,44 @@ Source files read directly from GitHub:
 ### Immediate engineering conclusion
 
 Neither public tree is a trustworthy drop-in build configuration. The useful parts are the device identity, kernel command line, Unisoc platform name, and a starting inventory of physical partition names. Before choosing build flags, inspect the actual TWRP/Android build source for its header-v4 and vendor_boot support, then derive a corrected BoardConfig from the observed firmware. Keep the stock kernel and DTB as prebuilts initially; do not add kernel rebuilding to the first recovery milestone. The first milestone should be a reproducibly built image with correct packaging and a verified non-destructive boot method, not userdata decryption or flashing.
+
+
+## Follow-up: Android 12.1 build-system behavior for vendor_boot v4 (2026-10-17)
+
+### Primary source checked
+
+Inspected TeamWin's own build-system sources, not just current AOSP:
+- [TeamWin/android_build, branch android-12.1, core/board_config.mk](https://github.com/TeamWin/android_build/blob/android-12.1/core/board_config.mk)
+- [TeamWin/android_build, branch android-12.1, core/Makefile](https://github.com/TeamWin/android_build/blob/android-12.1/core/Makefile)
+- [TeamWin/android_bootable_recovery, branch android-12.1](https://github.com/TeamWin/android_bootable_recovery/tree/android-12.1)
+
+The TWRP Android 12.1 build system explicitly documents:
+- `BOARD_MOVE_RECOVERY_RESOURCES_TO_VENDOR_BOOT` controls placing recovery resources into `vendor_boot`.
+- `BOARD_INCLUDE_RECOVERY_RAMDISK_IN_VENDOR_BOOT` controls including recovery resources as a standalone recovery ramdisk in `vendor_boot`, and is invalid unless the first flag is enabled.
+- `BOARD_USES_RECOVERY_AS_BOOT` and `BOARD_MOVE_RECOVERY_RESOURCES_TO_VENDOR_BOOT` cannot both be true. The build emits an error because recovery resources must be placed in either boot or vendor_boot, not both.
+- The source comment specifically says devices without a dedicated recovery partition use `BOARD_MOVE_RECOVERY_RESOURCES_TO_VENDOR_BOOT` to build recovery into `vendor_boot`.
+- The build's target-files metadata records `vendor_boot_size=$(BOARD_VENDOR_BOOTIMAGE_PARTITION_SIZE)`; this is a separate variable from `BOARD_BOOTIMAGE_PARTITION_SIZE`.
+
+### Consequence for RMX3511
+
+The inspected RMX3511 firmware has no dedicated recovery partition, and its stock recovery executable/fstab/init files are inside the single vendor ramdisk in a header-v4 `vendor_boot.img`. Therefore, for a source build using the TeamWin Android 12.1 build logic, `BOARD_USES_RECOVERY_AS_BOOT := true` in both public RMX3511 generated trees does not describe the observed stock placement. It selects the boot-image recovery path, whereas the source build provides a distinct vendor_boot path for this layout.
+
+This is stronger than the earlier size discrepancy: it is a mismatch between the public trees' declared recovery placement and the stock image structure inspected for firmware `RMX3511T2_13.F.73`. It still does **not** prove that every firmware version for RMX3511 has identical layout, nor does it prove that the public trees were ever successfully built or tested.
+
+### Build direction (not yet a final BoardConfig)
+
+- Do not reuse either public tree's `BOARD_USES_RECOVERY_AS_BOOT := true` unchanged.
+- Base the first build on TeamWin's Android 12.1 build path with recovery resources moved into `vendor_boot`, then verify the exact intended behavior of `BOARD_INCLUDE_RECOVERY_RAMDISK_IN_VENDOR_BOOT` against the selected build target and the stock vendor-ramdisk table.
+- Set `BOARD_VENDOR_BOOTIMAGE_PARTITION_SIZE` from the verified 100 MiB partition size; set `BOARD_BOOTIMAGE_PARTITION_SIZE` from the verified 64 MiB boot partition size. Keep the stock kernel, DTB, cmdline, vendor bootconfig, and non-recovery ramdisk content intact where the chosen packaging workflow requires them.
+- Do not simply generate a new `vendor_boot.img` from the device tree and flash it. The stock image has a vendor ramdisk table, DTB and header-v4 metadata; preserve/compare those components and confirm how the bootloader selects the recovery ramdisk before any device test.
+- The first engineering target remains a reproducible, inspectable image/package and a non-destructive boot method. Successful boot, touch, ADB, mounting, and data decryption are separate test milestones.
+
+### What remains unproven
+
+The source audit identifies the correct *build-system mechanism*, but does not yet establish the final RMX3511-specific implementation. Still to verify:
+1. Which exact TeamWin manifest/branch and Android base should be used for this mixed Android 13 system / Android 12 vendor stack.
+2. Whether the chosen TWRP build should replace the single stock vendor ramdisk, add a named recovery fragment, or use a separate recovery ramdisk entry, and how that interacts with the bootloader's recovery boot path.
+3. The exact mkbootimg arguments and source image components needed to preserve header-v4 vendor_boot metadata and AVB expectations.
+4. Kernel compatibility, display/touch initialization, recovery fstab correctness, and encrypted `/data` support.
+
+No image has been built or tested. Do not flash based on this research alone.
