@@ -380,3 +380,26 @@ Both BoardConfig files set `BOARD_USES_RECOVERY_AS_BOOT := true`, use header ver
 - Both trees include `recovery.fstab`; the newer one includes EROFS and F2FS entries, while the older tree's system/vendor logical entries are ext4-only. Stock firmware fstab and current AVB descriptors are the primary evidence for this device.
 
 The newer tree's `recovery.fstab` resembles the extracted stock recovery fstab in partition names, including F2FS `/data`, EROFS logical partitions, `/metadata`, and Unisoc modem/NV partitions. It should be diffed against the actual extracted fstab before reuse, especially encryption flags and logical/slot semantics. No tree from either repository should be flashed unchanged.
+
+
+## Audit of the public device trees against the stock image layout (2026-10-17)
+
+Source files read directly from GitHub:
+- [SULeimanV/RE87BAL1_TWRP_TREE/BoardConfig.mk](https://github.com/SULeimanV/RE87BAL1_TWRP_TREE/blob/master/BoardConfig.mk)
+- [SULeimanV/RE87BAL1_TWRP_TREE/recovery.fstab](https://github.com/SULeimanV/RE87BAL1_TWRP_TREE/blob/master/recovery.fstab)
+- [twrpdtgen/android_device_realme_ums9230_nico/BoardConfig.mk](https://github.com/twrpdtgen/android_device_realme_ums9230_nico/blob/ums9230_nico_Natv-user-12-SP1A.210812.016-1605-release-keys/BoardConfig.mk)
+- [twrpdtgen/android_device_realme_ums9230_nico/recovery.fstab](https://github.com/twrpdtgen/android_device_realme_ums9230_nico/blob/ums9230_nico_Natv-user-12-SP1A.210812.016-1605-release-keys/recovery.fstab)
+
+### Device-tree assumptions that conflict with observed firmware
+
+1. **Recovery placement is not established by either tree.** Both set `BOARD_USES_RECOVERY_AS_BOOT := true`. The actual stock package has no dedicated `recovery` partition; its 100 MiB `vendor_boot` image uses header v4 and contains a vendor ramdisk with the stock recovery executable, recovery fstab, and recovery init scripts. Therefore the generated setting cannot be accepted without confirming the TWRP build system's header-v4/vendor-ramdisk packaging behavior. The image must preserve the stock boot/vendor_boot split and place TWRP resources in the correct image. Do not infer that a normal recovery-as-boot image is correct merely because the device is A/B.
+2. **Boot size is wrong in both trees.** Both declare `BOARD_BOOTIMAGE_PARTITION_SIZE := 104857600` (100 MiB), while the observed physical `boot_a` is 64 MiB. The value happens to match the observed `vendor_boot_a` size.
+3. **Super size is wrong in both trees.** Both declare `BOARD_SUPER_PARTITION_SIZE := 9126805504` (9,126,805,504 bytes), while the firmware XML declares 8000 MiB (8,388,608,000 bytes). The generated dynamic-partition size is also hardcoded to 9,122,611,200 bytes, larger than the XML's entire super partition.
+4. **Filesystem assumptions are stale/inconsistent.** Both trees set `BOARD_SYSTEMIMAGE_PARTITION_TYPE := ext4` and `BOARD_VENDORIMAGE_FILE_SYSTEM_TYPE := ext4`. The newer tree's fstab has EROFS entries for `system`, `system_ext`, `vendor`, `product`, and `vendor_dlkm`, consistent with the extracted first-stage fstab and Android 13 AVB package descriptors for system/product. The older tree's logical partition entries are ext4-only. The recovery fstab needs to support the filesystems actually present; image-build variables and mount fstab entries must be audited separately.
+5. **The newer tree duplicates `system` in the dynamic partition list:** `system system system_ext vendor product vendor_dlkm`. The older tree's list is `system system_ext vendor product vendor_dlkm`. Do not copy the duplicate.
+6. **Data encryption is under-specified in both TWRP fstabs.** Their `/data` entry specifies F2FS but omits the stock recovery fstab's file-encryption and metadata key-directory options. Even if TWRP boots and mounts F2FS, successful decryption of user data is not established. Keep data decryption as a separate compatibility test; do not promise it from these files.
+7. **The generated trees are based on older device properties.** Their product makefiles identify an Android 12-era build description/fingerprint from 2023, while the installed system reports Android 13 build `R.202408010030`. The current package itself also reports Android 12 vendor and Android 13 system AVB properties. This is a compatibility point to verify, not sufficient proof by itself that the device tree cannot be used.
+
+### Immediate engineering conclusion
+
+Neither public tree is a trustworthy drop-in build configuration. The useful parts are the device identity, kernel command line, Unisoc platform name, and a starting inventory of physical partition names. Before choosing build flags, inspect the actual TWRP/Android build source for its header-v4 and vendor_boot support, then derive a corrected BoardConfig from the observed firmware. Keep the stock kernel and DTB as prebuilts initially; do not add kernel rebuilding to the first recovery milestone. The first milestone should be a reproducibly built image with correct packaging and a verified non-destructive boot method, not userdata decryption or flashing.
