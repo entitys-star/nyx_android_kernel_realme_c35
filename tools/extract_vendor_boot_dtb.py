@@ -63,7 +63,7 @@ def main() -> int:
     print(f"sha256: {digest}")
     if payload[:4] == bytes.fromhex("d7b7ab1e"):
         total = struct.unpack_from(">I", payload, 4)[0]
-        count = struct.unpack_from(">I", payload, 20)[0]
+        count = struct.unpack_from(">I", payload, 16)[0]
         print(f"Android DT table: declared_size={total}, entries={count}")
     elif payload[:4] == bytes.fromhex("d00dfeed"):
         print("DTB payload begins with a raw FDT")
