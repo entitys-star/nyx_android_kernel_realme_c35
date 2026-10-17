@@ -704,3 +704,29 @@ Next implementation stages:
 2. Add a minimal device tree generated from the exact stock vendor_boot, then manually review it rather than treating generated output as a working recovery.
 3. Add the exact stock DTB/DTBO-derived display settings and recovery fstab; resolve AVB and vendor_boot packaging before producing an image.
 4. Audit touch firmware, recovery SELinux, mounts/decryption, and ADB; then build reproducibly and only afterward plan a non-destructive boot test.
+
+
+## Follow-up: matching stock `dtbo.img` inspection (2026-10-17)
+
+The matching `dtbo.img` was uploaded and parsed directly.
+
+- File length: **8,388,608 bytes** (8 MiB); SHA-256: `8cadbd0f5d9667977f887cc728f7683033834faabbccee95c6c4aa336ceeacab`.
+- Android DT table magic `0xd7b7ab1e`; declared table size **2,770,905 bytes**; header size 32; entry size 32; **21 FDT entries**; table page-size field 2048. The remainder of the 8 MiB partition image is padding.
+- Every entry contains a valid FDT header and is parseable. Entries 0–13 share one panel-candidate set; entries 14–20 contain an expanded/different candidate set. The DT table entries' board ID/revision/custom fields are all zero, so those fields alone do not identify the selected overlay.
+- The overlay set includes both 720×1600 timing candidates and FHD+ candidates: `lcd_NT36672C_csot_mipi_hd` and `lcd_NT36672C_tm_mipi_hd` declare **1080×2408**; `lcd_g40396_truly_mipi_fhd` declares **1080×2400**; several `icnl9911C`, `hx83112a`, `hx83102d`, and `ft8006saa` candidates declare **720×1600**. These are alternatives embedded in overlays, not evidence that all panels are used on this handset.
+- Each parsed overlay has an `oppo,touchscreen` node with touch coordinate properties including `touch,panel-coords` = `0,720,0,1600` and X/Y values of 720 and 1600. This is the touch coordinate space; it must not be confused with the actual panel pixel resolution.
+- Several overlays include FocalTech-specific display-coordinate properties, while others carry Himax/Chipone/NVT-related properties. The firmware clearly supports multiple panel/touch variants. The active overlay and matching touch firmware still cannot be selected from the DTBO table header alone.
+
+### Consequences for the device tree
+
+Do not hardcode 720×1600 as the TWRP display resolution merely because the touch coordinate space is 720×1600. The overlay data contains FHD+ timings as well as HD timings, and the RMX3511 retail specification is FHD+. For the recovery UI, the most defensible initial target is **1080×2408**, but this remains a candidate until the active panel/overlay is tied to the exact device variant. If the stock recovery reports a different framebuffer size, use the runtime framebuffer result instead.
+
+The current branch contains only a TWRP device-tree scaffold, recovery fstab, research documentation, and a vendor_boot DTB extraction helper; there is no kernel source tree or kernel build workflow in this branch to delete. Keep boot-image address/offset and vendor_boot packaging variables in `BoardConfig.mk`: although they mention the kernel image layout, they are necessary metadata for building a compatible vendor_boot image with the stock kernel left in `boot.img`. Remove only actual kernel source/build artifacts if any are later added; do not remove required image-layout configuration.
+
+### Remaining concrete blockers after DTBO inspection
+
+1. Identify which LCD/touch variant is active on this specific RMX3511 (runtime stock properties/logs or board-specific selection data).
+2. Locate the FT8756 firmware blob or prove which touch driver/firmware is actually used by this handset. DTBO contains several controller-specific property sets and does not by itself prove that FT8756 is the active controller.
+3. Generate the full recovery root from this exact vendor_boot, rather than leaving the current scaffold's recovery runtime absent.
+4. Generate and audit a TWRP-specific fstab; stock recovery fstab alone does not prove decryption support.
+5. Resolve AVB / rollback-index behavior and bootloader recovery selection before any flash test.
