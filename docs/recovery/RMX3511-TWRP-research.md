@@ -529,3 +529,31 @@ Primary manifest references:
 - [twrp-12.1 manifest README](https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp/blob/twrp-12.1/README.md)
 - [twrp-12.1 manifest default.xml](https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp/blob/twrp-12.1/default.xml)
 - [TeamWin Android 12.1 vendor_boot build logic](https://github.com/TeamWin/android_build/blob/android-12.1/core/Makefile)
+
+
+## Follow-up: Unisoc-specific tree generator and existing RMX3511 recovery attempts (2026-10-17)
+
+### A better source-tree starting point
+
+Found [OneLast-arch/twrpdtgen-sprd](https://github.com/OneLast-arch/twrpdtgen-sprd), a maintained Unisoc/SPRD-specific fork of `twrpdtgen` (latest inspected commit 2026-08-05). Unlike the older generic generator, its documented `vendor_boot` v3/v4 path extracts the actual vendor ramdisk, DTB, vendor command line, ramdisk table and bootconfig from the stock image. Its generated SPRD tree:
+- uses a `twrp_<codename>` product instead of the old `omni_<codename>` product;
+- uses `BOARD_BOOT_HEADER_VERSION` and stock `vendor_boot` parameters;
+- selects `twrp-12.1` for Android 13 and earlier, `twrp-14.1` for Android 14+;
+- retains stock DTB, first-stage fstab, kernel modules, recovery init/ueventd files, SELinux policy/context files and vendor runtime, while excluding stock `init.rc` so it cannot override TWRP's init entry point;
+- supports the legacy Unisoc display/DRM path and can inspect DTB/DTBO for panel dimensions.
+
+This is a better starting point than manually adapting either 2023 generated tree. It is still a generator, not proof that its output will boot on RMX3511; its output must be audited against this phone's extracted files and the exact TeamWin manifest.
+
+### Existing public TWRP build is not a suitable replacement
+
+The public [Ufiano/TWRP_realme_RE87BAL1](https://github.com/Ufiano/TWRP_realme_RE87BAL1) repository has `vendor_boot.img` releases of exactly 100 MiB, including Alpha V1.0 (2024-09-12). That corroborates the practical use of `vendor_boot` as the recovery target for this device generation, but it is a prebuilt image and is not being used as the solution.
+
+The contemporaneous [Hovatek report for RE87BAL1](https://www.hovatek.com/forum/thread-47284.html) reports serious issues in that port, including non-working touch/ADB/fastboot, inability to mount `/vendor`, broken reboot targets and settings not saving. The related 4PDA post describes flashing the image to `vendor_boot` and then using `adb reboot recovery`. These reports support the target partition, but also show why simply reusing the image is not enough.
+
+The separate [Ufiano/android_device_realme_RE87BAL1](https://github.com/Ufiano/android_device_realme_RE87BAL1) repository contains only a README and license in the inspected tree; it does not provide a usable source device tree. No source tree for the existing Alpha image was found there.
+
+### Concrete next engineering step
+
+Generate a fresh candidate tree from the **stock** `vendor_boot.img` with `twrpdtgen-sprd`, using `--manufacturer realme --codename ums9230_nico` if the image does not identify the product correctly. Review the generated `BoardConfig.mk`, product makefile, `recovery.fstab`, retained vendor ramdisk, module list and SELinux handling before building. Include the stock `dtbo.img` in the audit if needed to confirm the panel dimensions.
+
+The exact stock `vendor_boot.img` is the key input: it is 100 MiB and its ramdisk/table contents cannot be reconstructed reliably from textual properties alone. The currently available research records its structure and properties but does not contain the binary payload. Do not generate a final device tree or vendor_boot image from the prebuilt TWRP image in place of the stock image.
