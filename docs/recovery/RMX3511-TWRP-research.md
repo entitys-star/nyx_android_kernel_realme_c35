@@ -183,3 +183,17 @@ Interpretation and caveats:
 - This stock recovery init file contains substantial Unisoc/Realme factory and hardware-test support, so not every vendor action should be carried over into TWRP.
 - The displayed `on init` action creates paths beneath `/data` but this excerpt alone does not show the normal recovery data-mount sequence; creating a directory is not proof that userdata is mounted.
 - The exact effect of `trigger factorytest` and the normal recovery class/service contents should be checked against the complete set of action headers and service declarations before drawing further conclusions.
+
+## Follow-up: complete action/service header inventory
+
+The user ran:
+```
+grep -nE '^(on |service |import |mount_all|mount |class_start|start recovery|trigger )' init.recovery.common.rc
+```
+
+The visible action/service headers are:
+- Services: `healthd` (line 5), `create_splloader_dual_slot_byname_path` (9), calibration/factory modem/logging/network/console/GPS services (16–77).
+- Actions: `on init` (82), `on boot` (155), `on fs` (165), `on post-fs-data` (169), `on property:ro.debuggable=1` (211), `on property:ro.bootmode=recovery` (214), USB config triggers (217, 240), and boot-mode-specific `cali` (261), `factorytest` (328), and `factorytest && ro.debuggable=0` (408).
+- No top-level `import`, `mount_all`, `mount`, `class_start`, `start recovery`, or `trigger` lines are reported by this grep pattern because those commands occur indented inside actions; the pattern intentionally only matches column-one headers. The file's board-specific init stub imports this common file, and the recovery boot-mode action at line 214 starts the `recovery` class.
+
+Next investigation should inspect the contexts around `on boot`, `on fs`, `on post-fs-data`, `ro.debuggable=1`, and `ro.bootmode=recovery` (roughly lines 145–225) to understand mounts and startup without confusing nested commands with action headers.
