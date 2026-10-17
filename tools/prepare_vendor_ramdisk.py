@@ -54,6 +54,14 @@ def main() -> int:
     if not (Path(__file__).with_name("extract_vendor_boot_ramdisk.py")).is_file():
         raise SystemExit("error: extract_vendor_boot_ramdisk.py must be beside this script")
 
+    dtb_extractor = Path(__file__).with_name("extract_vendor_boot_dtb.py")
+    if not dtb_extractor.is_file():
+        raise SystemExit("error: extract_vendor_boot_dtb.py must be beside this script")
+    subprocess.run([
+        sys.executable, str(dtb_extractor), str(source_image),
+        "--output", str(device_tree / "prebuilt" / "dtb.img"),
+    ], check=True)
+
     with tempfile.TemporaryDirectory(prefix="rmx3511-vendor-ramdisk-") as temp:
         temp_path = Path(temp)
         archive = temp_path / "vendor_ramdisk.cpio"
