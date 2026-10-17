@@ -270,3 +270,15 @@ Confirmed:
 - ELF metadata reports Android API/platform version 31 (Android 12-era build target), and the binary is stripped.
 - This is consistent with the earlier `prop.default` values identifying the extracted recovery ramdisk as `ums9230_nico_Natv-user` / Android 12, while the currently installed system reports Android 13. This version mismatch remains unresolved and means we must verify that all firmware images belong to a compatible package before basing a build on them.
 - `file` output alone does not reveal required shared libraries or prove source availability. Next inspect dynamic dependencies with an Android-aware ELF tool such as `llvm-readelf -d system/bin/recovery` (or `readelf -d` if installed); do not try to execute the Android binary on the host.
+
+## Follow-up: stock recovery dynamic dependencies
+
+The user ran `llvm-readelf -d system/bin/recovery`. The Android 31 AArch64 PIE binary declares these `DT_NEEDED` dependencies:
+- Android HALs: `android.hardware.health@2.0.so`, `android.hardware.boot@1.0.so`, `android.hardware.boot@1.1.so`
+- Android platform libraries: `libcutils.so`, `liblp.so`, `libprotobuf-cpp-lite.so`, `libbase.so`, `libbootloader_message.so`, `libcrypto.so`, `libext4_utils.so`, `libfs_mgr.so`, `libfusesideload.so`, `libhidl-gen-utils.so`, `libhidlbase.so`, `liblog.so`, `libselinux.so`, `libtinyxml2.so`, `libutils.so`, `libz.so`, `libziparchive.so`, `librecovery_ui.so`, `libc++.so`, `libc.so`, `libm.so`, `libdl.so`.
+- ELF flags include `BIND_NOW` and `NOW PIE`; binary uses Android-specific relocation tags.
+
+Interpretation:
+- This is a platform recovery executable linked against Android recovery/HAL and platform libraries, not a standalone Linux binary that can simply be copied into a generic recovery ramdisk.
+- For TWRP, use the TWRP source/build system and a device tree that supplies the correct device-specific build configuration, fstab, init, kernel/DTB handling, and required proprietary/vendor compatibility where applicable. Reusing the stock binary alone is not a viable substitute for a TWRP build.
+- This dependency list alone does not establish which of these libraries are present in the extracted ramdisk or whether the stock executable can boot against the current Android 13 vendor/system combination. The previously noted Android 12/13 mismatch remains unresolved.
