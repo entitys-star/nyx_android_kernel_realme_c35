@@ -197,3 +197,20 @@ The visible action/service headers are:
 - No top-level `import`, `mount_all`, `mount`, `class_start`, `start recovery`, or `trigger` lines are reported by this grep pattern because those commands occur indented inside actions; the pattern intentionally only matches column-one headers. The file's board-specific init stub imports this common file, and the recovery boot-mode action at line 214 starts the `recovery` class.
 
 Next investigation should inspect the contexts around `on boot`, `on fs`, `on post-fs-data`, `ro.debuggable=1`, and `ro.bootmode=recovery` (roughly lines 145–225) to understand mounts and startup without confusing nested commands with action headers.
+
+## Follow-up: normal recovery startup and generic filesystem actions
+
+The user inspected lines 145–225 of `init.recovery.common.rc`.
+
+Confirmed from the shown excerpt:
+- `on boot` enables ConfigFS USB gadget mode, writes `force_ro=0` for `/sys/block/mmcblk0boot0` and `mmcblk0boot1`, and changes permissions for several battery charging controls.
+- `on fs` creates `/data/misc/bluetooth`.
+- `on post-fs-data` changes ownership/mode of `/data`, runs `restorecon /data`, creates Bluetooth, Wi-Fi, DHCP, and vendor logging directories, and writes Wi-Fi settings under `/data/vendor/wifi`.
+- `on property:ro.debuggable=1` enables a Unisoc diagnostic parameter.
+- `on property:ro.bootmode=recovery` runs `class_start recovery`.
+- A USB ConfigFS trigger handles the combined `adb,vser,gser` configuration.
+
+Interpretation/caution:
+- These actions assume paths under `/data` are usable when their triggers run, but this excerpt does not itself show which block device or filesystem mounted there. The stock recovery's separate `recovery.fstab` defines a F2FS userdata entry, but actual normal-mode mount ordering must be established from the full init and recovery binary behavior.
+- The `on boot` writes that disable read-only protection on eMMC boot partitions are vendor-specific and potentially sensitive; they are not instructions to reproduce blindly in TWRP.
+- The stock `class_start recovery` trigger confirms the class name, but the shown file does not declare a `service ... class recovery` entry. Service/class declarations may be elsewhere in the extracted ramdisk or in the recovery binary.
