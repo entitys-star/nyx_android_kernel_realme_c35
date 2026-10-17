@@ -444,3 +444,49 @@ The source audit identifies the correct *build-system mechanism*, but does not y
 4. Kernel compatibility, display/touch initialization, recovery fstab correctness, and encrypted `/data` support.
 
 No image has been built or tested. Do not flash based on this research alone.
+
+
+## Follow-up: v4 ramdisk fragment type and preserving the stock vendor ramdisk (2026-10-17)
+
+### Confirmed AOSP format semantics
+
+Checked the official [AOSP vendor boot partition documentation](https://source.android.com/docs/core/architecture/partitions/vendor-boot-partitions) against the extracted stock image:
+- Header v4 supports multiple concatenated vendor ramdisk fragments with a table describing each fragment.
+- Ramdisk type `1` is `VENDOR_RAMDISK_TYPE_PLATFORM`; type `2` is `VENDOR_RAMDISK_TYPE_RECOVERY`.
+- The platform fragment is always loaded; the bootloader should load the recovery-type fragment when booting recovery. A bootloader may instead ignore the table and load all fragments.
+- The inspected stock `vendor_boot.img` has exactly one table entry of type `0x1` (platform), and that fragment contains the stock recovery executable, recovery fstab and recovery init scripts. Thus stock firmware places its recovery environment in the always-loaded platform ramdisk rather than a separately tagged recovery fragment.
+
+### What TeamWin's build flags actually do
+
+The TeamWin Android 12.1 `core/Makefile` shows:
+- `BOARD_MOVE_RECOVERY_RESOURCES_TO_VENDOR_BOOT := true` moves recovery resources away from boot/recovery-image output and into vendor_boot packaging.
+- With `BOARD_INCLUDE_RECOVERY_RAMDISK_IN_VENDOR_BOOT := true`, the build creates a separate vendor-ramdisk fragment named `recovery`, explicitly tagged `--ramdisk_type RECOVERY`; recovery resources are not merged into the default vendor ramdisk.
+- If the second flag is not true, the build instead adds recovery files to the default vendor ramdisk. That would produce a different structure from the separate-fragment approach.
+- When `BOARD_RAMDISK_USE_LZ4 := true`, this TeamWin build uses `lz4 -l` (legacy LZ4 format used by the Linux kernel) for ramdisk compression.
+
+Source: [TeamWin android-12.1 core/Makefile](https://github.com/TeamWin/android_build/blob/android-12.1/core/Makefile), especially the vendor-fragment setup and ramdisk compression rules.
+
+### Packaging strategy to test first
+
+For the first controlled build, the least destructive *candidate* is to preserve the stock platform vendor ramdisk as-is and add TWRP's built recovery resources as a separate header-v4 `RECOVERY` fragment. This matches the documented Android v4 mechanism and avoids rebuilding the stock platform ramdisk's vendor-specific init files/modules from an incomplete device tree.
+
+Candidate build flags for evaluation (not yet a validated final configuration):
+```makefile
+BOARD_USES_RECOVERY_AS_BOOT :=
+BOARD_MOVE_RECOVERY_RESOURCES_TO_VENDOR_BOOT := true
+BOARD_INCLUDE_RECOVERY_RAMDISK_IN_VENDOR_BOOT := true
+BOARD_BOOTIMAGE_PARTITION_SIZE := 67108864
+BOARD_VENDOR_BOOTIMAGE_PARTITION_SIZE := 104857600
+BOARD_RAMDISK_USE_LZ4 := true
+```
+
+Reasons and limits:
+- The first two size values correspond to the observed 64 MiB `boot_a` and 100 MiB `vendor_boot_a` partitions in the user's firmware package.
+- LZ4 is a candidate because the stock vendor ramdisk was identified as LZ4-compressed. Confirm the exact compression framing and mkbootimg output before accepting a built image.
+- The standalone recovery fragment should contain TWRP resources while the existing platform fragment retains the stock vendor recovery files/modules. When booting recovery, the bootloader is expected to load both platform and recovery fragments, allowing the recovery fragment to overlay the relevant recovery paths. **This overlay and bootloader behavior are not yet tested on RMX3511.**
+- Do not set `BOARD_USES_GENERIC_KERNEL_IMAGE := true` merely to enable this path: the inspected device uses a device-specific Unisoc kernel/DTB, and generic-kernel-image mode is a separate compatibility claim.
+- A standard Android build can generate `vendor_boot.img` from declared inputs, but it will not automatically preserve the exact original vendor_boot's header, DTB, bootconfig and platform ramdisk unless those inputs are explicitly supplied. The build output must be unpacked and compared with stock before any boot attempt. If the generated platform ramdisk differs, prefer a controlled repack that preserves stock components over silently replacing them.
+
+### Remaining gate before a test image
+
+Still need to establish the selected TeamWin manifest's exact branch compatibility, how its build target stages the device's stock platform ramdisk/DTB/bootconfig, and the final mkbootimg invocation. Then compare both images structurally (header fields, cmdline, bootconfig, DTB, ramdisk table entries/types/offsets/sizes, compression, and AVB footer) and verify the output fits the 100 MiB vendor_boot partition. No flash/boot test has been performed.
