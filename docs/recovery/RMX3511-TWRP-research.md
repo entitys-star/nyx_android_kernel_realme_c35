@@ -509,3 +509,23 @@ The current `RMX3511T2_13.F.73` firmware inspected here is different: it explici
 ### Android base branch remains an engineering choice
 
 TeamWin exposes both `android-12.1` and `android-13` source branches, and both implement the required vendor_boot v4 recovery-fragment flags. The firmware is mixed-version: system/product report Android 13, while vendor/vendor_dlkm and the stock recovery executable report Android 12/API 31. There is not yet enough evidence to claim either TWRP base is definitively correct. The first source build should compare the Android 12.1 and Android 13 dependency/manifest requirements against the available vendor HALs and recovery libraries before fixing the manifest branch. Do not infer the TWRP base solely from the system version.
+
+
+## Follow-up: selecting a reproducible TWRP manifest (2026-10-17)
+
+Checked the public [minimal-manifest-twrp/platform_manifest_twrp_aosp](https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp) repository directly:
+- Available branches are `twrp-11`, `twrp-12.1`, `twrp-14`, and `twrp-14.1`; there is no `twrp-13.0` manifest branch in the checked branch list.
+- The `twrp-12.1` manifest pins AOSP source to `android-12.1.0_r4` and includes the TWRP vendor project.
+- Its README documents `mka vendorbootimage` as the build target when the stock recovery is in `vendor_boot`.
+- The generated RMX3511 tree uses an `omni_ums9230_nico.mk` product that inherits `vendor/omni/config/common.mk`. That is not the product naming/configuration expected by the modern AOSP TWRP manifest, whose documented lunch target is `twrp_<device>-eng`. The public tree therefore needs adaptation even apart from its boot-layout assumptions.
+
+### Current best starting point, still unbuilt
+
+Use the `twrp-12.1` minimal AOSP manifest as the first reproducible candidate, because the actual vendor/vendor_dlkm stack and stock recovery executable identify as Android 12/API 31, and that manifest explicitly supports `vendorbootimage`. This is a pragmatic first target, not a claim that Android 12.1 is conclusively superior to every newer base: the system/product stack is Android 13 and the mixed-version compatibility must be validated.
+
+The device product should be adapted to a TWRP-prefixed product (for example `twrp_ums9230_nico`) rather than inheriting the old Omni common makefile. The first build should be limited to booting TWRP with stock kernel/DTB and correct vendor_boot packaging. Do not include userdata decryption or kernel rebuilding in the initial success criterion.
+
+Primary manifest references:
+- [twrp-12.1 manifest README](https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp/blob/twrp-12.1/README.md)
+- [twrp-12.1 manifest default.xml](https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp/blob/twrp-12.1/default.xml)
+- [TeamWin Android 12.1 vendor_boot build logic](https://github.com/TeamWin/android_build/blob/android-12.1/core/Makefile)
