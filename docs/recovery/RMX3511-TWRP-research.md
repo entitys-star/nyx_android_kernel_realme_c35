@@ -154,3 +154,16 @@ These details may be useful for understanding stock recovery behavior, but they 
 - Do not format `metadata` or `userdata` as part of reconnaissance.
 - Keep original stock `boot.img`, `vendor_boot.img`, `dtbo.img`, vbmeta images, and a verified restoration method available before any device-side test.
 - All findings above are based on local command output gathered so far; anything marked uncertain still needs confirmation.
+
+## Follow-up: conditions for tmpfs `/data` mode
+
+The inspected range of `init.recovery.common.rc` (lines 245–345 in the extracted file) shows the two previously found `mount_all /etc/recovery.tmpfsdata.fstab` + `mount tmpfs tmpfs /data mode=0777` sequences under explicit boot-mode property triggers:
+
+- `on property:ro.bootmode=cali`
+- `on property:ro.bootmode=factorytest`
+
+The `cali` block also configures the USB gadget as a serial/vser port, creates temporary directories under `/data`, starts the `cali` class, loads vendor GPU modules from `/mnt/product/socko/`, and starts vendor logging/modem services. The `factorytest` block sets USB to `adb,vser,gser`, mounts the same temporary `/data`, creates a `/system` symlink to `/system_root/system`, and prepares test-related directories and device permissions.
+
+**Interpretation:** the observed tmpfs `/data` behavior belongs to calibration/factory-test modes, not evidence of the normal user-facing recovery path. Do not copy this tmpfs mounting behavior into TWRP as a default. The exact normal recovery boot path still needs inspection in the remaining init script, especially its triggers and service definitions.
+
+This finding is based on the user's terminal output of `sed -n '245,345p' init.recovery.common.rc`; it does not establish how all firmware variants behave.
