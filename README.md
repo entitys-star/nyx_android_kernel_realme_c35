@@ -10,6 +10,7 @@ Research only so far. No recovery image has been built or boot-tested. Do not fl
 - Stock `vendor_boot.img` is header v4 and 100 MiB.
 - The stock `dtbo.img` has 21 FDT overlays; the observed touch coordinate space is 720 × 1600.
 - The stock recovery ramdisk includes the touchscreen module set, including `sprd-focaltech.ko` and `focaltech_ft8756_spi_ts.ko`; DTBO candidates use the `oppo,touchscreen` compatible, so the active driver/panel still needs confirmation. See [touch-module audit](docs/recovery/RMX3511-touch-module-audit.md).
+- The stock recovery module list has been checked against the staged ramdisk: all 157 listed modules are present, and stock `init.rc` is excluded. The device config now derives TWRP's module-load list from `modules.load.recovery`.
 - AVB/rollback configuration, data decryption, and recovery boot behavior remain to be validated.
 
 ## Research
