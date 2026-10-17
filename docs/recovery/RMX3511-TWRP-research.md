@@ -651,3 +651,22 @@ The first-stage fstab for `ums9230_nico` includes the logical system/vendor part
 ### Updated next step
 
 The binary-input blocker is cleared. Next, generate a candidate tree with `twrpdtgen-sprd` against this exact image, then audit the generated `BoardConfig.mk`, product target, copied recovery files, DTB handling, AVB settings, and output packaging against the fields above. In parallel, locate the FT8756 firmware blob and confirm panel/touch nodes from DTB/DTBO. No TWRP image has yet been built or boot-tested; do not flash an unverified output.
+
+
+## Follow-up: vendor_boot DT table and display/touch implications (2026-10-17)
+
+The `dtb` payload inside this image is not a raw FDT starting at byte zero. Its first 32 bytes are an Android device-tree table header:
+- magic `0xd7b7ab1e`;
+- total size `163,976`;
+- header size `32`;
+- entry size `32`;
+- entry count `1`;
+- entry-table offset `32`;
+- table page-size field `2048`;
+- the sole entry points to one FDT at offset `64`, size `163,912`.
+
+The embedded FDT identifies the SoC as Unisoc UMS9230 and has a generic MIPI panel node (`sprd,generic-mipi-panel`) under the DSI host. The base FDT does not expose panel resolution through the generator's expected `sprd,sr-width`/`sprd,sr-height` properties, and no touchscreen node was found in that base FDT. Therefore the panel dimensions and touch-controller configuration may be supplied by `dtbo.img`; the base DTB alone is insufficient to settle these values.
+
+This matches the generator's design: its SPRD profile scans FDT entries for panel dimensions and can inspect a DTBO image. The next useful firmware input is the matching stock `dtbo.img` from `RMX3511T2_13.F.73`. Until it is examined, leave `TARGET_SCREEN_WIDTH`, `TARGET_SCREEN_HEIGHT`, and any touch-specific overlay assumptions unconfirmed rather than hardcoding guessed values.
+
+The stock ramdisk's touch module list and absent firmware blob are recorded in the preceding binary-audit section. The matching DTBO and vendor firmware files must be checked together before the first boot test.
