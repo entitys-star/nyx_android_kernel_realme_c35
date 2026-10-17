@@ -53,7 +53,7 @@ def main() -> int:
         "vendor_ramdisk_offset": ramdisk_offset, "vendor_ramdisk_size": ramdisk_size,
         "vendor_ramdisk_sha256": sha256(ramdisk), "dtb_offset": dtb_offset,
         "dtb_size": dtb_size, "dtb_sha256": sha256(dtb),
-        "vendor_cmdline": image[28:2048].split(bytes([0]), 1)[0].decode("ascii", "replace"),
+        "vendor_cmdline": image[28:2076].split(bytes([0]), 1)[0].decode("ascii", "replace"),
     }
     if version == 4:
         table_size, table_count, table_entry_size = struct.unpack_from("<III", image, 2112)
