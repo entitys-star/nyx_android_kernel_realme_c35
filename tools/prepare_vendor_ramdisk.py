@@ -107,8 +107,21 @@ def main() -> int:
             raise SystemExit("error: target contains init.rc; refusing to leave stock init.rc in TWRP root")
         if not (target / "system/etc/recovery.fstab").is_file():
             raise SystemExit("error: stock recovery.fstab was not staged")
-        if not (target / "lib/modules/modules.load.recovery").is_file():
+        load_list = target / "lib/modules/modules.load.recovery"
+        module_dir = target / "lib/modules"
+        if not load_list.is_file():
             print("warning: modules.load.recovery was not found; audit module loading", file=sys.stderr)
+        else:
+            missing_modules = [
+                name.strip() for name in load_list.read_text(encoding="utf-8").splitlines()
+                if name.strip() and not (module_dir / name.strip()).is_file()
+            ]
+            if missing_modules:
+                preview = ", ".join(missing_modules[:12])
+                suffix = " ..." if len(missing_modules) > 12 else ""
+                raise SystemExit(
+                    f"error: modules.load.recovery references missing modules: {preview}{suffix}"
+                )
 
     print(f"Staged stock vendor runtime into: {device_tree / 'recovery' / 'root'}")
     print("Review the generated tree, SELinux policy handling, and TWRP fstab before building.")
