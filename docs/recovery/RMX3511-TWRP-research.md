@@ -167,3 +167,19 @@ The `cali` block also configures the USB gadget as a serial/vser port, creates t
 **Interpretation:** the observed tmpfs `/data` behavior belongs to calibration/factory-test modes, not evidence of the normal user-facing recovery path. Do not copy this tmpfs mounting behavior into TWRP as a default. The exact normal recovery boot path still needs inspection in the remaining init script, especially its triggers and service definitions.
 
 This finding is based on the user's terminal output of `sed -n '245,345p' init.recovery.common.rc`; it does not establish how all firmware variants behave.
+
+## Follow-up: common init actions and recovery-mode trigger
+
+The user inspected lines 1–114 and 345–430 of `init.recovery.common.rc`.
+
+Confirmed from the shown source:
+- Services include `healthd`, a one-shot helper `create_splloader_dual_slot_byname_path.sh`, modem control services for `cali` and `factorytest`, and vendor logging/network/GPS-related services.
+- The `on init` action sets `PATH` and `SECONDARY_STORAGE`, creates storage mount points and symlinks, adjusts permissions on Unisoc diagnostic nodes, creates several `/data/...` directories, loads three vendor GPU modules from `/mnt/product/socko/`, adjusts GNSS permissions, starts vendor disk/logging services, and ends with `trigger factorytest`.
+- The tail contains `on property:ro.bootmode=factorytest && property:ro.debuggable=0`, which sets USB config to `vser`.
+- Earlier inspection of lines around 214 found `on property:ro.bootmode=recovery` followed by `class_start recovery`.
+- The temporary tmpfs `/data` mount was seen under the explicit `cali` and `factorytest` boot-mode property actions, not in the displayed generic `on init` range.
+
+Interpretation and caveats:
+- This stock recovery init file contains substantial Unisoc/Realme factory and hardware-test support, so not every vendor action should be carried over into TWRP.
+- The displayed `on init` action creates paths beneath `/data` but this excerpt alone does not show the normal recovery data-mount sequence; creating a directory is not proof that userdata is mounted.
+- The exact effect of `trigger factorytest` and the normal recovery class/service contents should be checked against the complete set of action headers and service declarations before drawing further conclusions.
