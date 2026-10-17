@@ -256,3 +256,17 @@ Interpretation:
 - `adbd` and `fastbootd` are declared `disabled` (not started automatically by their service class alone; they need an explicit start/restart/property path).
 - The `service recovery ...` line is syntax inside Android's init configuration, not a command to run in the host Fish shell. The user's attempt to execute it directly resulted in `fish: Unknown command: service`; no device state was changed.
 - The exact mechanism that starts the recovery service (including whether the recovery binary self-starts or is started by init service class handling) still needs verification from the remaining init configuration and recovery class logic. Do not infer it from this stanza alone.
+
+## Follow-up: stock recovery executable format
+
+The user ran `file system/bin/recovery` from the extracted vendor ramdisk root. Output:
+```
+system/bin/recovery: ELF 64-bit LSB pie executable, ARM aarch64, version 1 (SYSV), dynamically linked, interpreter /system/bin/linker64, for Android 31, BuildID[md5/uuid]=767eda7548a28997c0d70befea607447, stripped
+```
+
+Confirmed:
+- 64-bit ARM/AArch64 Android PIE executable.
+- Dynamically linked with Android linker at `/system/bin/linker64`.
+- ELF metadata reports Android API/platform version 31 (Android 12-era build target), and the binary is stripped.
+- This is consistent with the earlier `prop.default` values identifying the extracted recovery ramdisk as `ums9230_nico_Natv-user` / Android 12, while the currently installed system reports Android 13. This version mismatch remains unresolved and means we must verify that all firmware images belong to a compatible package before basing a build on them.
+- `file` output alone does not reveal required shared libraries or prove source availability. Next inspect dynamic dependencies with an Android-aware ELF tool such as `llvm-readelf -d system/bin/recovery` (or `readelf -d` if installed); do not try to execute the Android binary on the host.
