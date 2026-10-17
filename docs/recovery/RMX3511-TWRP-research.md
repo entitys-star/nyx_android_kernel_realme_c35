@@ -214,3 +214,19 @@ Interpretation/caution:
 - These actions assume paths under `/data` are usable when their triggers run, but this excerpt does not itself show which block device or filesystem mounted there. The stock recovery's separate `recovery.fstab` defines a F2FS userdata entry, but actual normal-mode mount ordering must be established from the full init and recovery binary behavior.
 - The `on boot` writes that disable read-only protection on eMMC boot partitions are vendor-specific and potentially sensitive; they are not instructions to reproduce blindly in TWRP.
 - The stock `class_start recovery` trigger confirms the class name, but the shown file does not declare a `service ... class recovery` entry. Service/class declarations may be elsewhere in the extracted ramdisk or in the recovery binary.
+
+## Follow-up: recovery service declared in ramdisk init.rc
+
+The user's recursive grep found the actual service declaration in both `./etc/init/hw/init.rc` and the equivalent symlinked path `./system/etc/init/hw/init.rc`:
+```
+service recovery /system/bin/recovery
+```
+at line 72. It also found:
+```
+service adbd /system/bin/adbd --root_seclabel=u:r:su:s0 --device_banner=recovery
+```
+at line 76.
+
+The grep did not show a `class recovery` declaration in this output, but `init.recovery.common.rc` starts that class when `ro.bootmode=recovery`. The service stanza's remaining lines and any imported init files must be inspected before concluding its class/options or exact startup ordering. Duplicate paths are due to symlinked layout; the `odm`/ `vendor_dlkm` missing-target warnings are from dangling symlinks, not proof the search is incomplete in ordinary files. Binary-match notices are expected when recursive grep scans executables.
+
+Next inspect the service block and nearby init imports, e.g. `sed -n '55,95p' etc/init/hw/init.rc` from the current extracted root.
