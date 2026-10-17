@@ -322,3 +322,44 @@ Observed extracted `ROM/` files and approximate displayed sizes:
 The likely name-based correspondence is `boot.img`→`boot_a`, `vendor_boot.img`→`vendor_boot_a`, `dtbo.img`→`dtbo_a`, `super.img`→`super`, and the named vbmeta images to their corresponding vbmeta roles. Treat this as a package-role hypothesis, not authorization to flash them directly. In particular, `vbmeta-sign.img` is not interchangeable by name or size with the smaller partition-specific vbmeta images.
 
 No separate `recovery` partition is declared in the examined partition list; the stock recovery environment is carried in the boot/vendor-boot arrangement. Further build work should continue from the stock boot and vendor_boot structures and the extracted recovery ramdisk, rather than assume a dedicated recovery partition.
+
+
+## AVB metadata inspection (2026-10-17)
+
+Ran `avbtool info_image` on `vbmeta-sign.img`, `vbmeta_system.img`, `vbmeta_vendor.img`, `vbmeta_product.img`, and `vbmeta_system_ext.img`.
+
+Common properties reported for all five:
+- Minimum libavb version 1.0
+- Algorithm `SHA256_RSA4096`
+- Rollback Index 1; Flags 0; Release String `avbtool 1.2.0`
+- All begin with AVB magic `AVB0`.
+
+`vbmeta-sign.img`:
+- Public key SHA-1: `0b2c2a7ec06fb50c4a030b7d96a1282670bfc383`
+- Contains chain partition descriptors for `boot` (rollback index location 1), `vendor_boot` (18), `dtbo` (6), `vbmeta_system` (2), `vbmeta_vendor` (4), `vbmeta_system_ext` (3), `vbmeta_product` (5), plus `l_modem`, `l_ldsp`, `l_gdsp`, `pm_sys`, and `l_agdsp`.
+- Properties report boot, system, and vendor OS version 13 and security patch 2024-07-05.
+- This is the root-style AVB metadata image in the package based on its chain descriptors; do not assume its filename is the raw partition name.
+
+`vbmeta_system.img`:
+- Public key SHA-1: `5ad58b3d49e09ebe9f4ac6f69e25271dec6d9e46`
+- Properties identify system and system_ext as Android 13, fingerprint `realme/RMX3511/RE87BAL1:13/TP1A.220624.014/R.202408010030:user/release-keys`, patch 2024-07-05.
+- Hashtree descriptors cover `system` (image size 3,066,585,088 bytes) and `system_ext` (564,166,656 bytes), SHA-256, 4096-byte data/hash blocks.
+
+`vbmeta_vendor.img`:
+- Public key SHA-1: `96ec51bfe0749fef522a74ed02e87c071111a2a8`
+- Properties identify `vendor` and `vendor_dlkm` as Android 12, fingerprint `realme/RMX3511/RE87BAL1:12/SP1A.210812.016/S.R.202408010030:user/release-keys`, patch 2024-07-05.
+- Hashtree descriptors cover `vendor` (image size 809,582,592 bytes) and `vendor_dlkm` (8,400,896 bytes).
+
+`vbmeta_product.img`:
+- Public key SHA-1: `f3e79cd4e3ca50703c546976d81eb6dd1d5a9c5b`
+- Properties identify product as Android 13 with the same Android 13 fingerprint and 2024-07-05 patch.
+- Hashtree descriptor covers `product` (image size 1,390,014,464 bytes).
+
+`vbmeta_system_ext.img`:
+- Public key SHA-1: `ca001596729cec10fcd4bbe70d070d801bfaf1fa`
+- Unexpectedly, its descriptors report `vendor_dlkm` properties and a `vendor_dlkm` hashtree with image size 8,400,896 bytes, matching the descriptor values reported by `vbmeta_vendor.img`, despite its different public key and filename/partition role in the package XML.
+- This is an anomaly to investigate, not proof that the file is corrupt or that the two images are interchangeable. Do not flash based on filename alone.
+
+Important confirmed version split: the package's AVB properties describe system/system_ext/product as Android 13 but vendor/vendor_dlkm as Android 12, consistent with earlier stock recovery ramdisk properties and vendor fingerprint. This indicates a mixed-version system/vendor stack in the package and should be recorded as an observed fact; it does not by itself establish that the package is invalid.
+
+These `avbtool info_image` results inspect metadata and descriptors; they do not by themselves verify the RSA signature against a trusted public key or prove that the currently installed phone uses these exact images.
