@@ -472,6 +472,7 @@ For the first controlled build, the least destructive *candidate* is to preserve
 
 Candidate build flags for evaluation (not yet a validated final configuration):
 ```makefile
+BOARD_BOOT_HEADER_VERSION := 4
 BOARD_USES_RECOVERY_AS_BOOT :=
 BOARD_MOVE_RECOVERY_RESOURCES_TO_VENDOR_BOOT := true
 BOARD_INCLUDE_RECOVERY_RAMDISK_IN_VENDOR_BOOT := true
@@ -490,3 +491,21 @@ Reasons and limits:
 ### Remaining gate before a test image
 
 Still need to establish the selected TeamWin manifest's exact branch compatibility, how its build target stages the device's stock platform ramdisk/DTB/bootconfig, and the final mkbootimg invocation. Then compare both images structurally (header fields, cmdline, bootconfig, DTB, ramdisk table entries/types/offsets/sizes, compression, and AVB footer) and verify the output fits the 100 MiB vendor_boot partition. No flash/boot test has been performed.
+
+
+## Follow-up: why the old trees do not configure vendor_boot in TeamWin build logic (2026-10-17)
+
+Checked the exact TeamWin Android 13 branch, which exists alongside `android-12.1`:
+- [TeamWin/android_build/android-13/core/board_config.mk](https://github.com/TeamWin/android_build/blob/android-13/core/board_config.mk)
+- [TeamWin/android_build/android-13/core/Makefile](https://github.com/TeamWin/android_build/blob/android-13/core/Makefile)
+- [TeamWin/android_bootable_recovery/android-13](https://github.com/TeamWin/android_bootable_recovery/tree/android-13)
+
+The build source sets `BUILDING_VENDOR_BOOT_IMAGE := true` only when `BOARD_BOOT_HEADER_VERSION` is defined and is at least 3 (unless product configuration explicitly disables the target). The two public RMX3511 generated trees set `BOARD_BOOTIMG_HEADER_VERSION := 4`, then pass it to `mkbootimg` through `BOARD_MKBOOTIMG_ARGS`, but do not define `BOARD_BOOT_HEADER_VERSION`. In the inspected TeamWin Android 12.1/13 build logic, these are not interchangeable variables: passing `--header_version 4` does not set the build-system condition that enables the `vendor_boot.img` target.
+
+**Conclusion for the inspected build-system versions:** unless another included file supplies `BOARD_BOOT_HEADER_VERSION` (none was found in the inspected device tree), those trees do not activate TeamWin's vendor_boot image build target. Their `BOARD_USES_RECOVERY_AS_BOOT := true` setting instead describes recovery resources in the boot image. This explains why their 100 MiB boot-size value may be deliberate for the firmware/build layout they originally targeted; it must not be reinterpreted as a vendor_boot size without evidence.
+
+The current `RMX3511T2_13.F.73` firmware inspected here is different: it explicitly has `boot_a` = 64 MiB and `vendor_boot_a` = 100 MiB, and the stock recovery files reside in vendor_boot. For a build targeting that firmware, `BOARD_BOOT_HEADER_VERSION := 4` is required to enable the vendor_boot build path in TeamWin's Android 12.1/13 build system, and `BOARD_VENDOR_BOOTIMAGE_PARTITION_SIZE` must be set separately.
+
+### Android base branch remains an engineering choice
+
+TeamWin exposes both `android-12.1` and `android-13` source branches, and both implement the required vendor_boot v4 recovery-fragment flags. The firmware is mixed-version: system/product report Android 13, while vendor/vendor_dlkm and the stock recovery executable report Android 12/API 31. There is not yet enough evidence to claim either TWRP base is definitively correct. The first source build should compare the Android 12.1 and Android 13 dependency/manifest requirements against the available vendor HALs and recovery libraries before fixing the manifest branch. Do not infer the TWRP base solely from the system version.
