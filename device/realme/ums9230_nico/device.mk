@@ -1,7 +1,7 @@
 LOCAL_PATH := device/realme/ums9230_nico
 
 PRODUCT_USE_DYNAMIC_PARTITIONS := true
-PRODUCT_SHIPPING_API_LEVEL := 31
+PRODUCT_SHIPPING_API_LEVEL := 30 # ro.product.first_api_level in stock ramdisk
 
 # The generated/extracted stock vendor ramdisk must be staged here before build.
 # This copies its recovery-only vendor runtime without including kernel sources.
