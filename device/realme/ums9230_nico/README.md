@@ -15,9 +15,9 @@ Target firmware: `RMX3511T2_13.F.73`, Android 13, device identity `ums9230_nico`
 ## Build blockers
 
 1. Stage `prebuilt/dtb.img` and stock vendor ramdisk support files from the matching firmware.
-2. Confirm the correct DTBO overlay/panel identity. The overlays indicate 720×1600 coordinates and include FocalTech-specific properties, but the exact selected overlay is not yet proven.
-3. Find the FT8756 firmware blob required by the touch driver; it was not found in the stock vendor ramdisk.
-4. Resolve AVB: the stock vbmeta chain uses rollback-index location 18 for vendor_boot; do not use the generator's generic location 0 without proof.
-5. Validate data decryption, dynamic partition mounting, USB/ADB, and bootloader recovery selection.
+2. Generate and review the TWRP-specific `twrp.fstab`; it is not present in this scaffold yet. The stock `recovery.fstab` is only the Android recovery mount table.\n3. Confirm the correct DTBO overlay/panel identity. The overlays indicate 720×1600 coordinates and include FocalTech-specific properties, but the exact selected overlay is not yet proven.
+4. Find the FT8756 firmware blob required by the touch driver; it was not found in the stock vendor ramdisk.
+5. Resolve AVB: the stock vbmeta chain uses rollback-index location 18 for vendor_boot; do not use the generator's generic location 0 without proof.
+6. Validate data decryption, dynamic partition mounting, USB/ADB, and bootloader recovery selection.
 
 This tree intentionally contains no kernel source or kernel build workflow. The stock kernel stays in the original `boot.img`; the intended output is a rebuilt `vendor_boot.img`.
