@@ -9,7 +9,7 @@ Target firmware: `RMX3511T2_13.F.73`, Android 13, device identity `ums9230_nico`
 - `BoardConfig.mk`: parsed vendor_boot v4 offsets, vendor_boot output size, and TWRP settings.
 - `twrp_ums9230_nico.mk`: product target.
 - `recovery/root/system/etc/recovery.fstab`: copied from the stock vendor ramdisk as a starting point; must be reviewed for TWRP mount/decryption behavior.
-- `prebuilt/dtb.img`: must be extracted byte-for-byte from the stock `vendor_boot.img` before building.
+- `prebuilt/dtb.img`: extract byte-for-byte from the stock `vendor_boot.img` before building. The matching 100 MiB image is recorded in the research notes (SHA-256 `17e5c60be1414e56fabfaf50887aa1e2dc910e8dc6516ad2182fce182762c4b1`). Run `python3 tools/audit_vendor_boot.py /path/to/vendor_boot.img -o /tmp/rmx3511-vendor-boot` to extract `dtb.img`, preserve the compressed vendor ramdisk, and write a hash manifest; copy the resulting `dtb.img` into `prebuilt/dtb.img`.
 - `recovery/root/`: must contain the required stock vendor ramdisk runtime and recovery init/ueventd/module/SELinux files, generated from the exact stock image.
 
 ## Build blockers
