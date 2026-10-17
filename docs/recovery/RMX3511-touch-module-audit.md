@@ -39,3 +39,20 @@ That source identifies the SPI driver name as `fts_ts` and the device-tree compa
 ## Current conclusion
 
 **FT8756 driver availability is confirmed; working TWRP touch is not.** Keep the initial recovery build focused on preserving the stock kernel/DTB and getting a bootable recovery. Do not claim touch support until the active DTBO, module load order and actual recovery input events are verified.
+
+
+## Additional inspection of the extracted stock vendor_boot ramdisk
+
+The matching `vendor_boot.img` and `dtbo.img` were available in the Library and were inspected locally.
+
+- The stock recovery ramdisk itself already contains `/lib/modules/focaltech_ft8756_spi_ts.ko`.
+- Its `modinfo` reports `vermagic: 5.4.254-android12-9-g0b4c88190d9d-ab1584 SMP preempt mod_unload modversions aarch64`, no hard module dependencies, and aliases for `focaltech,fts`.
+- `/lib/modules/modules.load.recovery` includes `focaltech_ft8756_spi_ts.ko` at line 123 and `sprd-focaltech.ko` at line 153.
+- `modules.alias` maps `oppo,touchscreen` to `sprd_focaltech`; it maps `focaltech,fts` to `focaltech_ft8756_spi_ts`.
+- `modules.dep` lists `sprd-focaltech.ko` as depending on `sprd-nt36xxx.ko`, `sprd-drm.ko`, `lcd_bias_adjust.ko`, `apsys-dvfs.ko`, `sprd-gsp.ko`, `unisoc-iommu.ko`, `trusty-ipc.ko`, and `hq_hardware_info.ko`. The FT8756-specific module has no listed hard dependencies.
+
+The DTBO image has 21 entries. The base DTB from `vendor_boot.img` contains the enabled SPI controller at `/soc/ap-apb/spi@20120000`, with other AP SPI controllers disabled. DTBO entries contain a `/fragment@7/__overlay__/touchscreen@0` node with `compatible = "oppo,touchscreen"`, SPI max frequency `0x927c00` (9.6 MHz), touch IRQ/reset GPIO references, and 720×1600 coordinate properties. Entries 14–20 additionally include `focaltech,max-touch-number = 10` and `focaltech,display-coords = <0 0 720 1600>`. These nodes match the `sprd-focaltech` alias, **not** the `focaltech,fts` alias of the FT8756-specific module.
+
+The DTBO contains multiple LCD candidates, including `lcd_ft8006saa_inx_mipi_hd`, and the vendor firmware partition contains FTS8006SAA firmware files. This makes the generic `sprd-focaltech` driver a strong candidate for the actual overlay path, but the active overlay/panel still cannot be proven from the table alone. Do not hard-code FT8756 as the handset's active controller yet.
+
+This improves the recovery plan: retain the stock recovery ramdisk module set and its `modules.load.recovery` ordering rather than inventing a new module load list. Verify the merged live device tree or recovery input events before pruning any alternative drivers.
