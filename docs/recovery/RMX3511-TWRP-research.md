@@ -282,3 +282,43 @@ Interpretation:
 - This is a platform recovery executable linked against Android recovery/HAL and platform libraries, not a standalone Linux binary that can simply be copied into a generic recovery ramdisk.
 - For TWRP, use the TWRP source/build system and a device tree that supplies the correct device-specific build configuration, fstab, init, kernel/DTB handling, and required proprietary/vendor compatibility where applicable. Reusing the stock binary alone is not a viable substitute for a TWRP build.
 - This dependency list alone does not establish which of these libraries are present in the extracted ramdisk or whether the stock executable can boot against the current Android 13 vendor/system combination. The previously noted Android 12/13 mismatch remains unresolved.
+
+
+## Firmware XML and image inventory (2026-10-17)
+
+Source checked locally: `ROM/ums9230_nico.xml` and the extracted `ROM/` directory.
+
+The XML partition table declares:
+- `boot_a`, `boot_b`: 64 MiB each
+- `vendor_boot_a`, `vendor_boot_b`: 100 MiB each
+- `dtbo_a`, `dtbo_b`: 8 MiB each
+- `super`: 8000 MiB
+- `metadata`: 16 MiB
+- `userdata`: size sentinel `0xFFFFFFFF`
+- separate A/B entries for `vbmeta`, `vbmeta_system`, `vbmeta_system_ext`, `vbmeta_vendor`, `vbmeta_product`, `vbmeta_odm`, and `avbmeta_rs`.
+
+In the XML download-file section:
+- `BOOT` (`CODE2`) maps to block `boot_a`; description: “Kernel image file”.
+- `VENDOR_BOOT` (`CODE2`) maps to `vendor_boot_a`; description: “Kernel vendor_boot image file”.
+- `DTBO` (`CODE2`) maps to `dtbo_a`.
+- `Super` (`YAFFS_IMG2`) maps to `super`.
+- `VBMETA` and the named vbmeta entries map to their corresponding `*_a` blocks.
+- `UserData` (`YAFFS_IMG2`) maps to `userdata` and has `groupflag="1"`.
+
+The `Base` and `Size` fields shown for these file entries are `0x0`; they do not establish the actual payload image sizes. The XML maps package file roles to blocks, but the file names alone do not prove a safe raw-flash mapping for every image.
+
+Observed extracted `ROM/` files and approximate displayed sizes:
+- `boot.img`: 67M
+- `vendor_boot.img`: 105M
+- `dtbo.img`: 8.4M
+- `super.img`: 5.9G
+- `vbmeta-sign.img`: 1.0M
+- `vbmeta_system.img`: 4.1K
+- `vbmeta_vendor.img`: 4.1K
+- `vbmeta_product.img`: 2.4K
+- `vbmeta_system_ext.img`: 2.4K
+- also present: `vbmeta_odm` is declared by XML, but no correspondingly named `vbmeta_odm.img` appeared in the displayed directory listing.
+
+The likely name-based correspondence is `boot.img`→`boot_a`, `vendor_boot.img`→`vendor_boot_a`, `dtbo.img`→`dtbo_a`, `super.img`→`super`, and the named vbmeta images to their corresponding vbmeta roles. Treat this as a package-role hypothesis, not authorization to flash them directly. In particular, `vbmeta-sign.img` is not interchangeable by name or size with the smaller partition-specific vbmeta images.
+
+No separate `recovery` partition is declared in the examined partition list; the stock recovery environment is carried in the boot/vendor-boot arrangement. Further build work should continue from the stock boot and vendor_boot structures and the extracted recovery ramdisk, rather than assume a dedicated recovery partition.
