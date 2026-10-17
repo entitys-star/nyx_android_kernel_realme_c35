@@ -704,8 +704,3 @@ Next implementation stages:
 2. Add a minimal device tree generated from the exact stock vendor_boot, then manually review it rather than treating generated output as a working recovery.
 3. Add the exact stock DTB/DTBO-derived display settings and recovery fstab; resolve AVB and vendor_boot packaging before producing an image.
 4. Audit touch firmware, recovery SELinux, mounts/decryption, and ADB; then build reproducibly and only afterward plan a non-destructive boot test.
-
-
-### Firmware label versus embedded vendor_boot properties
-
-The uploaded image was supplied as belonging to `RMX3511T2_13.F.73`, but its extracted `prop.default` reports Android **12**, SDK **31**, build description `ums9230_nico_Natv-user 12 SP1A.210812.016 1584 release-keys`, and `ro.product.first_api_level=30`. The initial device-tree scaffold was corrected to use those embedded values (shipping API level 30 and the actual build description). Before locking the TWRP branch/lunch target, verify that this exact vendor_boot image is paired with the intended `RMX3511T2_13.F.73` stock `boot.img` and `dtbo.img`; firmware package labels and embedded ramdisk properties do not currently agree on the Android release.
