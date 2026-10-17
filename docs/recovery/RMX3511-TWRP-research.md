@@ -593,3 +593,61 @@ This is the documented generation path, not a build or flash instruction. The ge
 ### Next verification gate
 
 The source-level path is now sufficiently identified: generate a fresh SPRD tree from the stock `RMX3511T2_13.F.73` `vendor_boot.img`, then compare the generated configuration and extracted ramdisk files against the firmware inventory already recorded in this document. The actual stock image bytes are not currently present in this research workspace or GitHub repository, so generation and image-level comparison have not yet occurred. Do not substitute the public prebuilt TWRP image for the stock `vendor_boot.img`.
+
+
+## Follow-up: binary audit of the uploaded stock `vendor_boot.img` (2026-10-17)
+
+The exact 100 MiB image requested for this investigation has now been uploaded and inspected directly. This supersedes earlier notes saying the binary was not available.
+
+### Image identity and header
+
+- File length: **104,857,600 bytes** (exactly 100 MiB, matching the observed `vendor_boot_a` partition size).
+- SHA-256: `17e5c60be1414e56fabfaf50887aa1e2dc910e8dc6516ad2182fce182762c4b1`.
+- Magic: `VNDRBOOT`; header version: **4**.
+- Page size: `4096`.
+- Kernel address field: `0x8000`; vendor ramdisk address field: `0x05400000`.
+- Vendor ramdisk payload size: **24,694,046 bytes**; starts at file offset `0x1000`.
+- DTB size: **163,976 bytes**; DTB starts at offset `24,698,880` (`0x178d000`).
+- Vendor ramdisk table size: **108 bytes**; one entry; entry size **108 bytes**.
+- Bootconfig size: **0 bytes**. Do not configure a non-empty stock bootconfig for this image based on prior generic expectations.
+- Vendor cmdline: `console=ttyS1,115200n8 buildvariant=user`.
+- Table entry: ramdisk size `24,694,046`, ramdisk offset `0`, type `1` (platform), empty name, all board-ID words zero.
+- The meaningful image data ends near 24.9 MiB; the file is padded to the full 100 MiB partition capacity.
+
+### Ramdisk decoding and actual recovery contents
+
+The ramdisk begins with legacy LZ4 magic `02 21 4c 18`. It was decoded as seven legacy LZ4 blocks into a 54,150,400-byte `070701` CPIO archive; the block stream reached the exact declared ramdisk end with no trailing or missing bytes. The extracted archive contains the stock recovery executable and its support files, so this is a usable source image for generating and auditing a device tree.
+
+Confirmed files include:
+- `system/bin/recovery` and the stock `adbd` executable.
+- `system/etc/recovery.fstab` and `system/etc/recovery.tmpfsdata.fstab`.
+- `first_stage_ramdisk/fstab.ums9230_nico`.
+- `init.recovery.common.rc`, `init.recovery.ums9230_nico.rc`, and matching per-board `ueventd` files.
+- `lib/modules/modules.load.recovery` and the stock Unisoc kernel modules.
+- The image includes multiple board-variant fstab/init files; the selected RMX3511 identity is `ums9230_nico`, not the other listed variants.
+
+### Touchscreen evidence and remaining blob dependency
+
+The recovery module load list explicitly includes:
+- `focaltech_ft8756_spi_ts.ko`
+- `sprd-focaltech.ko`
+- `sprd-nt36xxx.ko`
+- `sprd-cts.ko`
+- `ilitek.ko` and `chipone-tddi.ko`
+
+The FocalTech FT8756 SPI module's embedded strings show it requests a firmware file using a `focaltech_ts_fw_... .bin` naming pattern and reports failure if the firmware request fails. No standalone `.bin`, `.fw`, or `.img` firmware file was found in the extracted vendor ramdisk. Therefore the module itself is present, but this ramdisk alone does **not** prove that the matching touch firmware is available; inspect the exact firmware/vendor partitions or DTBO/vendor files before expecting touch to work in TWRP. This is especially relevant given reports of touch failures in earlier public ports.
+
+### Filesystem and partition details confirmed from the actual image
+
+The extracted `system/etc/recovery.fstab` defines:
+- `/data` as `/dev/block/by-name/userdata`, F2FS, with inline/file-based encryption and metadata key-directory options.
+- `/metadata` as ext4.
+- `/cache` with ext4 and F2FS alternatives.
+- Logical `system`, `system_ext`, `vendor`, `product`, and `vendor_dlkm` mounts.
+- Numerous Unisoc physical partitions under `/dev/block/by-name/`.
+
+The first-stage fstab for `ums9230_nico` includes the logical system/vendor partitions and `metadata`, but not `userdata`; the separate recovery fstab carries the `/data` definition. Correct TWRP decryption is still unproven and must not be inferred from the fstab alone.
+
+### Updated next step
+
+The binary-input blocker is cleared. Next, generate a candidate tree with `twrpdtgen-sprd` against this exact image, then audit the generated `BoardConfig.mk`, product target, copied recovery files, DTB handling, AVB settings, and output packaging against the fields above. In parallel, locate the FT8756 firmware blob and confirm panel/touch nodes from DTB/DTBO. No TWRP image has yet been built or boot-tested; do not flash an unverified output.
