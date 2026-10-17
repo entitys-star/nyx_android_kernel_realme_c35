@@ -56,3 +56,14 @@ The DTBO image has 21 entries. The base DTB from `vendor_boot.img` contains the 
 The DTBO contains multiple LCD candidates, including `lcd_ft8006saa_inx_mipi_hd`, and the vendor firmware partition contains FTS8006SAA firmware files. This makes the generic `sprd-focaltech` driver a strong candidate for the actual overlay path, but the active overlay/panel still cannot be proven from the table alone. Do not hard-code FT8756 as the handset's active controller yet.
 
 This improves the recovery plan: retain the stock recovery ramdisk module set and its `modules.load.recovery` ordering rather than inventing a new module load list. Verify the merged live device tree or recovery input events before pruning any alternative drivers.
+
+
+### Firmware lookup and module ordering
+
+Further inspection of the stock module metadata and ramdisk shows:
+
+- `sprd-focaltech.ko` reports `name: sprd_focaltech`, alias `oppo,touchscreen`, and `depends: sprd-drm,sprd-nt36xxx,hq_hardware_info`.
+- Its strings include firmware names for several FocalTech variants, including `Normal_fts8006saa_Truly_BOE.bin`, `Factory_fts8006saa_Truly_BOE.bin`, `Normal_FT8722_BOE.bin`, and `Normal_FT8615_INX.bin`, as well as the `focaltech_ts_fw_` request prefix. The stock vendor firmware listing contains the FTS8006SAA Truly/BOE normal and factory blobs, but that is not enough to identify the phone's active panel.
+- The stock ramdisk's `system/etc/ueventd.rc` declares firmware lookup directories including `/vendor/firmware/`. The recovery fstab mounts the logical `vendor` partition at `/vendor` as EROFS during first-stage mount.
+
+Therefore, retain the stock module ordering and make sure the real vendor partition and its firmware directory are accessible before the touchscreen driver tries to request firmware. Do not load only `focaltech_ft8756_spi_ts.ko` and assume that is sufficient: the DTBO compatible points to `sprd_focaltech`, whose dependency modules must also be available.
