@@ -230,3 +230,29 @@ at line 76.
 The grep did not show a `class recovery` declaration in this output, but `init.recovery.common.rc` starts that class when `ro.bootmode=recovery`. The service stanza's remaining lines and any imported init files must be inspected before concluding its class/options or exact startup ordering. Duplicate paths are due to symlinked layout; the `odm`/ `vendor_dlkm` missing-target warnings are from dangling symlinks, not proof the search is incomplete in ordinary files. Binary-match notices are expected when recursive grep scans executables.
 
 Next inspect the service block and nearby init imports, e.g. `sed -n '55,95p' etc/init/hw/init.rc` from the current extracted root.
+
+## Follow-up: exact recovery/adbd service stanzas
+
+The user inspected `etc/init/hw/init.rc`, lines 55–95. Exact declarations:
+```
+service recovery /system/bin/recovery
+    socket recovery stream 422 system system
+    seclabel u:r:recovery:s0
+
+service adbd /system/bin/adbd --root_seclabel=u:r:su:s0 --device_banner=recovery
+    disabled
+    socket adbd stream 660 system system
+    seclabel u:r:adbd:s0
+
+service fastbootd /system/bin/fastbootd
+    disabled
+    group system
+    seclabel u:r:fastbootd:s0
+```
+A following action says `on property:service.adb.root=1` then `restart adbd`; an `on fs && property:sys.usb.configfs=1` action begins configuring the USB gadget.
+
+Interpretation:
+- `recovery` service has a Unix stream socket named `recovery` with mode 422 and system ownership, and SELinux domain `u:r:recovery:s0`.
+- `adbd` and `fastbootd` are declared `disabled` (not started automatically by their service class alone; they need an explicit start/restart/property path).
+- The `service recovery ...` line is syntax inside Android's init configuration, not a command to run in the host Fish shell. The user's attempt to execute it directly resulted in `fish: Unknown command: service`; no device state was changed.
+- The exact mechanism that starts the recovery service (including whether the recovery binary self-starts or is started by init service class handling) still needs verification from the remaining init configuration and recovery class logic. Do not infer it from this stanza alone.
