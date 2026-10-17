@@ -670,3 +670,37 @@ The embedded FDT identifies the SoC as Unisoc UMS9230 and has a generic MIPI pan
 This matches the generator's design: its SPRD profile scans FDT entries for panel dimensions and can inspect a DTBO image. The next useful firmware input is the matching stock `dtbo.img` from `RMX3511T2_13.F.73`. Until it is examined, leave `TARGET_SCREEN_WIDTH`, `TARGET_SCREEN_HEIGHT`, and any touch-specific overlay assumptions unconfirmed rather than hardcoding guessed values.
 
 The stock ramdisk's touch module list and absent firmware blob are recorded in the preceding binary-audit section. The matching DTBO and vendor firmware files must be checked together before the first boot test.
+
+
+## Follow-up: stock DTBO audit (2026-10-17)
+
+The matching `dtbo.img` was uploaded and parsed.
+
+- File size: **8,388,608 bytes (8 MiB)**.
+- Android DT table magic: `0xd7b7ab1e`.
+- Declared DT table payload: **2,770,905 bytes**, followed by padding to the 8 MiB partition image.
+- Header: 32 bytes; entry size: 32 bytes; **21 FDT overlays**; table page-size field 2048; DT table version 0.
+- Every table entry has zero ID/revision/custom match words, so those fields alone do not distinguish a target overlay. Runtime selection/overlay fixups and stock DTBO ordering need to be preserved.
+
+### Display/touch information exposed by overlays
+
+Across the overlays, touchscreen nodes are under `fragment@7/__overlay__/touchscreen@0` and use `compatible = "oppo,touchscreen"`. The properties repeatedly report:
+- `touch,panel-coords = <0 720 0 1600>`;
+- `himax,display-coords = <0 720 0 1600>`;
+- on later entries, `focaltech,max-touch-number = <10>`;
+- `focaltech,display-coords = <0 0 720 1600>`;
+- IRQ GPIO encoded with controller phandle placeholder and line 16; reset GPIO placeholder and line 146.
+
+Entries 14–20 include the FocalTech-specific properties, while earlier overlays include the common Oppo touchscreen node and coordinate properties. This is evidence that a **720 × 1600** coordinate space is expected and that the touch configuration is overlaid from DTBO, not present in the base vendor_boot DTB.
+
+Important limitation: all overlay table entries have zero board-ID fields and several have different Novatek panel-criteria compatibles; the raw DTBO alone does not establish which overlay the stock bootloader selects for this physical handset. Do not pick an entry solely because it includes FocalTech properties. Preserve the complete stock DTBO for normal Android boot, and use the selected live device tree or matching panel ID to choose any recovery-specific fix. The DTBO contains configuration, not the missing standalone FT8756 firmware blob.
+
+## Branch cleanup and TWRP-only scope
+
+The `twrp-rmx3511-research` branch is being converted from a kernel-repository snapshot into a TWRP-only working tree. The kernel source remains available in the repository's other branches/history; this branch should contain only recovery research, the RMX3511 TWRP device tree, build metadata, and recovery-specific support files. Cleanup is intentionally scoped to this branch and must not alter the default/kernel branch.
+
+Next implementation stages:
+1. Keep this research document and a small branch README; remove kernel source/build workflows from the current TWRP branch snapshot.
+2. Add a minimal device tree generated from the exact stock vendor_boot, then manually review it rather than treating generated output as a working recovery.
+3. Add the exact stock DTB/DTBO-derived display settings and recovery fstab; resolve AVB and vendor_boot packaging before producing an image.
+4. Audit touch firmware, recovery SELinux, mounts/decryption, and ADB; then build reproducibly and only afterward plan a non-destructive boot test.
